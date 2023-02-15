@@ -241,10 +241,10 @@ public final class NativeCrypto {
     // --- Signature handling functions ----------------------------------------
 
     static native long EVP_DigestSignInit(
-            NativeRef.EVP_MD_CTX ctx, long evpMdRef, NativeRef.EVP_PKEY key);
+            NativeRef.EVP_MD_CTX ctx, long evpPkeyCtx, long evpMdRef);
 
     static native long EVP_DigestVerifyInit(
-            NativeRef.EVP_MD_CTX ctx, long evpMdRef, NativeRef.EVP_PKEY key);
+            NativeRef.EVP_MD_CTX ctx, long evpPkeyCtx, long evpMdRef);
 
     static native void EVP_DigestSignUpdate(
             NativeRef.EVP_MD_CTX ctx, byte[] buffer, int offset, int length);
@@ -273,6 +273,8 @@ public final class NativeCrypto {
             byte[] input, int inOffset, int inLength)
             throws IndexOutOfBoundsException, BadPaddingException;
 
+    static native long EVP_PKEY_CTX_create(NativeRef.EVP_PKEY pkey);
+
     static native void EVP_PKEY_CTX_free(long pkeyCtx);
 
     static native void EVP_PKEY_CTX_set_rsa_padding(long ctx, int pad)
@@ -288,6 +290,9 @@ public final class NativeCrypto {
             throws InvalidAlgorithmParameterException;
 
     static native void EVP_PKEY_CTX_set_rsa_oaep_label(long ctx, byte[] label)
+            throws InvalidAlgorithmParameterException;
+
+    static native void EVP_PKEY_CTX_set_id(long ctx, byte[] id)
             throws InvalidAlgorithmParameterException;
 
     // --- Block ciphers -------------------------------------------------------

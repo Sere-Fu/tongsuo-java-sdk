@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2013 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.conscrypt;
 
 import java.math.BigInteger;
@@ -37,9 +21,25 @@ import java.security.spec.X509EncodedKeySpec;
  * An implementation of a {@link KeyFactorySpi} for EC keys based on BoringSSL.
  */
 @Internal
-public class OpenSSLECKeyFactory extends KeyFactorySpi {
+public class ECKeyFactoryGeneric<pubkeySpec, prikeySpec, pubkey, prikey> extends KeyFactorySpi {
+    private Class<pubkeySpec> pubkeySpecClass;
+    private Class<prikeySpec> prikeySpecClass;
+    private Class<pubkey> pubkeyClass;
+    private Class<prikey> prikeyClass;
+    private int algType;
 
-    public OpenSSLECKeyFactory() {}
+    public ECKeyFactoryGeneric(
+        Class<pubkeySpec> pubkeySpecClass,
+        Class<prikeySpec> prikeySpecClass,
+        Class<pubkey> pubkeyClass,
+        Class<prikey> prikeyClass,
+        int algType) {
+        this.pubkeySpecClass = pubkeySpecClass;
+        this.prikeySpecClass = prikeySpecClass;
+        this.pubkeyClass = pubkeyClass;
+        this.prikeyClass = prikeyClass;
+        this.algType = algType;
+    }
 
     @Override
     protected PublicKey engineGeneratePublic(KeySpec keySpec) throws InvalidKeySpecException {
@@ -47,10 +47,14 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
             throw new InvalidKeySpecException("keySpec == null");
         }
 
-        if (keySpec instanceof ECPublicKeySpec) {
-            return new OpenSSLECPublicKey((ECPublicKeySpec) keySpec);
+        if (pubkeySpecClass.isAssignableFrom(keySpec.getClass())) {
+            try {
+                return (PublicKey) pubkeyClass.getConstructor(pubkeySpecClass).newInstance(pubkeySpecClass.cast(keySpec));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         } else if (keySpec instanceof X509EncodedKeySpec) {
-            return OpenSSLKey.getPublicKey((X509EncodedKeySpec) keySpec, NativeConstants.EVP_PKEY_EC);
+            return OpenSSLKey.getPublicKey((X509EncodedKeySpec) keySpec, algType);
         }
         throw new InvalidKeySpecException("Must use ECPublicKeySpec or X509EncodedKeySpec; was "
                 + keySpec.getClass().getName());
@@ -62,11 +66,14 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
             throw new InvalidKeySpecException("keySpec == null");
         }
 
-        if (keySpec instanceof ECPrivateKeySpec) {
-            return new OpenSSLECPrivateKey((ECPrivateKeySpec) keySpec);
+        if (prikeySpecClass.isAssignableFrom(keySpec.getClass())) {
+            try {
+                return (PrivateKey) prikeyClass.getConstructor(prikeySpecClass).newInstance(prikeySpecClass.cast(keySpec));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         } else if (keySpec instanceof PKCS8EncodedKeySpec) {
-            return OpenSSLKey.getPrivateKey((PKCS8EncodedKeySpec) keySpec,
-                    NativeConstants.EVP_PKEY_EC);
+            return OpenSSLKey.getPrivateKey((PKCS8EncodedKeySpec) keySpec, algType);
         }
         throw new InvalidKeySpecException("Must use ECPrivateKeySpec or PKCS8EncodedKeySpec; was "
                 + keySpec.getClass().getName());
@@ -149,7 +156,7 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
         if (key == null) {
             throw new InvalidKeyException("key == null");
         }
-        if ((key instanceof OpenSSLECPublicKey) || (key instanceof OpenSSLECPrivateKey)) {
+        if ((pubkeySpecClass.isAssignableFrom(key.getClass())) || (prikeySpecClass.isAssignableFrom(key.getClass()))) {
             return key;
         } else if (key instanceof ECPublicKey) {
             ECPublicKey ecKey = (ECPublicKey) key;

@@ -32,7 +32,7 @@ import org.conscrypt.OpenSSLX509CertificateFactory.ParsingException;
 /**
  * An implementation of a {@link java.security.PublicKey} for EC keys based on BoringSSL.
  */
-final class OpenSSLECPublicKey implements ECPublicKey, OpenSSLKeyHolder {
+class OpenSSLECPublicKey implements ECPublicKey, OpenSSLKeyHolder {
     private static final long serialVersionUID = 3215842926808298020L;
 
     private static final String ALGORITHM = "EC";

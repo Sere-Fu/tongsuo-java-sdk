@@ -1,45 +1,27 @@
 /*
- * Copyright (C) 2013 The Android Open Source Project
+ * Copyright 2023 The Tongsuo Project Authors. All Rights Reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://github.com/Tongsuo-Project/Tongsuo/blob/master/LICENSE.txt
  */
 
 package org.conscrypt;
 
-import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyFactorySpi;
 import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.security.interfaces.ECPrivateKey;
-import java.security.interfaces.ECPublicKey;
-import java.security.spec.ECParameterSpec;
-import java.security.spec.ECPoint;
-import java.security.spec.ECPrivateKeySpec;
-import java.security.spec.ECPublicKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
-/**
- * An implementation of a {@link KeyFactorySpi} for EC keys based on BoringSSL.
- */
 @Internal
-public class OpenSSLECKeyFactory extends KeyFactorySpi {
-
-    public OpenSSLECKeyFactory() {}
+public class SM2KeyFactory extends KeyFactorySpi{
+    public SM2KeyFactory() {}
 
     @Override
     protected PublicKey engineGeneratePublic(KeySpec keySpec) throws InvalidKeySpecException {
@@ -47,12 +29,12 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
             throw new InvalidKeySpecException("keySpec == null");
         }
 
-        if (keySpec instanceof ECPublicKeySpec) {
-            return new OpenSSLECPublicKey((ECPublicKeySpec) keySpec);
+        if (keySpec instanceof SM2PublicKeySpec) {
+            return new SM2PublicKey((SM2PublicKeySpec) keySpec);
         } else if (keySpec instanceof X509EncodedKeySpec) {
-            return OpenSSLKey.getPublicKey((X509EncodedKeySpec) keySpec, NativeConstants.EVP_PKEY_EC);
+            return OpenSSLKey.getPublicKey((X509EncodedKeySpec) keySpec, NativeConstants.EVP_PKEY_SM2);
         }
-        throw new InvalidKeySpecException("Must use ECPublicKeySpec or X509EncodedKeySpec; was "
+        throw new InvalidKeySpecException("Must use SM2PublicKeySpec or X509EncodedKeySpec; was "
                 + keySpec.getClass().getName());
     }
 
@@ -62,13 +44,13 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
             throw new InvalidKeySpecException("keySpec == null");
         }
 
-        if (keySpec instanceof ECPrivateKeySpec) {
-            return new OpenSSLECPrivateKey((ECPrivateKeySpec) keySpec);
+        if (keySpec instanceof SM2PrivateKeySpec) {
+            return new SM2PrivateKey((SM2PrivateKeySpec) keySpec);
         } else if (keySpec instanceof PKCS8EncodedKeySpec) {
             return OpenSSLKey.getPrivateKey((PKCS8EncodedKeySpec) keySpec,
-                    NativeConstants.EVP_PKEY_EC);
+                    NativeConstants.EVP_PKEY_SM2);
         }
-        throw new InvalidKeySpecException("Must use ECPrivateKeySpec or PKCS8EncodedKeySpec; was "
+        throw new InvalidKeySpecException("Must use SM2PrivateKeySpec or PKCS8EncodedKeySpec; was "
                 + keySpec.getClass().getName());
     }
 
@@ -83,42 +65,39 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
             throw new InvalidKeySpecException("keySpec == null");
         }
 
-        if (!"EC".equals(key.getAlgorithm())) {
-            throw new InvalidKeySpecException("Key must be an EC key");
+        if (!"SM2".equals(key.getAlgorithm())) {
+            throw new InvalidKeySpecException("Key must be an SM2 key");
         }
 
-        if (key instanceof ECPublicKey && ECPublicKeySpec.class.isAssignableFrom(keySpec)) {
-            ECPublicKey ecKey = (ECPublicKey) key;
+        if (key instanceof SM2PublicKey && SM2PublicKeySpec.class.isAssignableFrom(keySpec)) {
+            SM2PublicKey sm2Key = (SM2PublicKey) key;
             @SuppressWarnings("unchecked")
-            T result = (T) new ECPublicKeySpec(ecKey.getW(), ecKey.getParams());
+            T result = (T) new SM2PublicKeySpec(sm2Key.getW());
             return result;
-        } else if (key instanceof PublicKey && ECPublicKeySpec.class.isAssignableFrom(keySpec)) {
+        } else if (key instanceof PublicKey && SM2PublicKeySpec.class.isAssignableFrom(keySpec)) {
             final byte[] encoded = key.getEncoded();
             if (!"X.509".equals(key.getFormat()) || encoded == null) {
                 throw new InvalidKeySpecException("Not a valid X.509 encoding");
             }
-            ECPublicKey ecKey = (ECPublicKey) engineGeneratePublic(new X509EncodedKeySpec(encoded));
+            SM2PublicKey ecKey = (SM2PublicKey) engineGeneratePublic(new X509EncodedKeySpec(encoded));
             @SuppressWarnings("unchecked")
-            T result = (T) new ECPublicKeySpec(ecKey.getW(), ecKey.getParams());
+            T result = (T) new SM2PublicKeySpec(ecKey.getW());
             return result;
-        } else if (key instanceof ECPrivateKey
-                && ECPrivateKeySpec.class.isAssignableFrom(keySpec)) {
-            ECPrivateKey ecKey = (ECPrivateKey) key;
+        } else if (key instanceof SM2PrivateKey && SM2PrivateKeySpec.class.isAssignableFrom(keySpec)) {
+            SM2PrivateKey ecKey = (SM2PrivateKey) key;
             @SuppressWarnings("unchecked")
-            T result = (T) new ECPrivateKeySpec(ecKey.getS(), ecKey.getParams());
+            T result = (T) new SM2PrivateKeySpec(ecKey.getS());
             return result;
-        } else if (key instanceof PrivateKey && ECPrivateKeySpec.class.isAssignableFrom(keySpec)) {
+        } else if (key instanceof PrivateKey && SM2PrivateKeySpec.class.isAssignableFrom(keySpec)) {
             final byte[] encoded = key.getEncoded();
             if (!"PKCS#8".equals(key.getFormat()) || encoded == null) {
                 throw new InvalidKeySpecException("Not a valid PKCS#8 encoding");
             }
-            ECPrivateKey ecKey =
-                    (ECPrivateKey) engineGeneratePrivate(new PKCS8EncodedKeySpec(encoded));
+            SM2PrivateKey ecKey = (SM2PrivateKey) engineGeneratePrivate(new PKCS8EncodedKeySpec(encoded));
             @SuppressWarnings("unchecked")
-            T result = (T) new ECPrivateKeySpec(ecKey.getS(), ecKey.getParams());
+            T result = (T) new SM2PrivateKeySpec(ecKey.getS());
             return result;
-        } else if (key instanceof PrivateKey
-                && PKCS8EncodedKeySpec.class.isAssignableFrom(keySpec)) {
+        } else if (key instanceof PrivateKey && PKCS8EncodedKeySpec.class.isAssignableFrom(keySpec)) {
             final byte[] encoded = key.getEncoded();
             if (!"PKCS#8".equals(key.getFormat())) {
                 throw new InvalidKeySpecException("Encoding type must be PKCS#8; was "
@@ -149,32 +128,9 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
         if (key == null) {
             throw new InvalidKeyException("key == null");
         }
-        if ((key instanceof OpenSSLECPublicKey) || (key instanceof OpenSSLECPrivateKey)) {
+
+        if ((key instanceof SM2PublicKey) || (key instanceof SM2PrivateKey)) {
             return key;
-        } else if (key instanceof ECPublicKey) {
-            ECPublicKey ecKey = (ECPublicKey) key;
-
-            ECPoint w = ecKey.getW();
-
-            ECParameterSpec params = ecKey.getParams();
-
-            try {
-                return engineGeneratePublic(new ECPublicKeySpec(w, params));
-            } catch (InvalidKeySpecException e) {
-                throw new InvalidKeyException(e);
-            }
-        } else if (key instanceof ECPrivateKey) {
-            ECPrivateKey ecKey = (ECPrivateKey) key;
-
-            BigInteger s = ecKey.getS();
-
-            ECParameterSpec params = ecKey.getParams();
-
-            try {
-                return engineGeneratePrivate(new ECPrivateKeySpec(s, params));
-            } catch (InvalidKeySpecException e) {
-                throw new InvalidKeyException(e);
-            }
         } else if ((key instanceof PrivateKey) && "PKCS#8".equals(key.getFormat())) {
             byte[] encoded = key.getEncoded();
             if (encoded == null) {
@@ -196,7 +152,7 @@ public class OpenSSLECKeyFactory extends KeyFactorySpi {
                 throw new InvalidKeyException(e);
             }
         } else {
-            throw new InvalidKeyException("Key must be EC public or private key; was "
+            throw new InvalidKeyException("Key must be SM2 public or private key; was "
                     + key.getClass().getName());
         }
     }

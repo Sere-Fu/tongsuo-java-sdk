@@ -39,7 +39,7 @@ import java.security.spec.PSSParameterSpec;
 @Internal
 public class OpenSSLSignature extends SignatureSpi {
     private enum EngineType {
-        RSA, EC,
+        RSA, EC, SM2
     }
 
     private NativeRef.EVP_MD_CTX ctx;
@@ -86,12 +86,18 @@ public class OpenSSLSignature extends SignatureSpi {
 
     private void resetContext() throws InvalidAlgorithmParameterException {
         NativeRef.EVP_MD_CTX ctxLocal = new NativeRef.EVP_MD_CTX(NativeCrypto.EVP_MD_CTX_create());
-        if (signing) {
-            evpPkeyCtx = NativeCrypto.EVP_DigestSignInit(ctxLocal, evpMdRef, key.getNativeRef());
-        } else {
-            evpPkeyCtx = NativeCrypto.EVP_DigestVerifyInit(ctxLocal, evpMdRef, key.getNativeRef());
+        evpPkeyCtx = NativeCrypto.EVP_PKEY_CTX_create(key.getNativeRef());
+        if (engineType == EngineType.SM2) {
+            configureEVP_PKEY_CTX(evpPkeyCtx);
         }
-        configureEVP_PKEY_CTX(evpPkeyCtx);
+        if (signing) {
+            evpPkeyCtx = NativeCrypto.EVP_DigestSignInit(ctxLocal, evpPkeyCtx, evpMdRef);
+        } else {
+            evpPkeyCtx = NativeCrypto.EVP_DigestVerifyInit(ctxLocal, evpPkeyCtx, evpMdRef);
+        }
+        if (engineType != EngineType.SM2) {
+            configureEVP_PKEY_CTX(evpPkeyCtx);
+        }
         this.ctx = ctxLocal;
     }
 
@@ -184,6 +190,12 @@ public class OpenSSLSignature extends SignatureSpi {
                 if (pkeyType != NativeConstants.EVP_PKEY_EC) {
                     throw new InvalidKeyException("Signature initialized as " + engineType
                             + " (not EC)");
+                }
+                break;
+            case SM2:
+                if (pkeyType != NativeConstants.EVP_PKEY_SM2) {
+                    throw new InvalidKeyException("Signature initialized as " + engineType
+                            + " (not SM2)");
                 }
                 break;
             default:
@@ -337,6 +349,45 @@ public class OpenSSLSignature extends SignatureSpi {
     public static final class SHA512ECDSA extends OpenSSLSignature {
         public SHA512ECDSA() {
             super(EvpMdRef.SHA512.EVP_MD, EngineType.EC);
+        }
+    }
+
+    public static final class SM3withSM2 extends OpenSSLSignature {
+        private byte[] id;
+
+        public SM3withSM2() {
+            super(EvpMdRef.SM3.EVP_MD, EngineType.SM2);
+        }
+
+        @Override
+        protected void configureEVP_PKEY_CTX(long ctx) throws InvalidAlgorithmParameterException {
+            if (id != null) {
+                NativeCrypto.EVP_PKEY_CTX_set_id(ctx, id);
+            }
+        }
+
+        @Override
+        public void engineSetParameter(AlgorithmParameterSpec params)
+                throws InvalidAlgorithmParameterException {
+            if (!(params instanceof SM2SignatureParameterSpec)) {
+                throw new InvalidAlgorithmParameterException(
+                        "Unsupported parameter: " + params + ". Only "
+                                + SM2SignatureParameterSpec.class.getName() + " supported");
+            }
+            id = ((SM2SignatureParameterSpec) params).getId();
+        }
+
+        @Override
+        protected final AlgorithmParameters engineGetParameters() {
+            try {
+                AlgorithmParameters result = AlgorithmParameters.getInstance("SM2");
+                result.init(new SM2SignatureParameterSpec(id));
+                return result;
+            } catch (NoSuchAlgorithmException e) {
+                throw new ProviderException("Failed to create SM2 Signature AlgorithmParameters", e);
+            } catch (InvalidParameterSpecException e) {
+                throw new ProviderException("Failed to create SM2 Signature AlgorithmParameters", e);
+            }
         }
     }
 

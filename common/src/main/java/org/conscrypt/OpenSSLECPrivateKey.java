@@ -36,7 +36,7 @@ import org.conscrypt.OpenSSLX509CertificateFactory.ParsingException;
 /**
  * An implementation of a {@link PrivateKey} for EC keys based on BoringSSL.
  */
-final class OpenSSLECPrivateKey implements ECPrivateKey, OpenSSLKeyHolder {
+class OpenSSLECPrivateKey implements ECPrivateKey, OpenSSLKeyHolder {
     private static final long serialVersionUID = -4036633595001083922L;
 
     private static final String ALGORITHM = "EC";
@@ -230,8 +230,8 @@ final class OpenSSLECPrivateKey implements ECPrivateKey, OpenSSLKeyHolder {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("OpenSSLECPrivateKey{");
-        sb.append("params={");
+        StringBuilder sb = new StringBuilder(this.getClass().getName());
+        sb.append("{params={");
         sb.append(NativeCrypto.EVP_PKEY_print_params(key.getNativeRef()));
         sb.append("}}");
         return sb.toString();
