@@ -824,6 +824,9 @@ static jlong NativeCrypto_EVP_PKEY_new_EC_KEY(JNIEnv* env, jclass, jobject group
         ERR_clear_error();
         return 0;
     }
+    if (EC_GROUP_get_curve_name(group) == EVP_PKEY_SM2) {
+        EVP_PKEY_set_alias_type(pkey.get(), EVP_PKEY_SM2);
+    }
     OWNERSHIP_TRANSFERRED(eckey);
 
     JNI_TRACE("EVP_PKEY_new_EC_KEY(%p, %p, %p) => %p", group, pubkey, keyJavaBytes, pkey.get());
@@ -1810,6 +1813,9 @@ static jlong NativeCrypto_EC_KEY_generate_key(JNIEnv* env, jclass, jobject group
         ERR_clear_error();
         return 0;
     }
+    if (EC_GROUP_get_curve_name(group) == EVP_PKEY_SM2) {
+        EVP_PKEY_set_alias_type(pkey.get(), EVP_PKEY_SM2);
+    }
     OWNERSHIP_TRANSFERRED(eckey);
 
     JNI_TRACE("EC_KEY_generate_key(%p) => %p", group, pkey.get());
@@ -1826,7 +1832,7 @@ static jlong NativeCrypto_EC_KEY_get1_group(JNIEnv* env, jclass, jobject pkeyRef
         return 0;
     }
 
-    if (EVP_PKEY_id(pkey) != EVP_PKEY_EC) {
+    if (EVP_PKEY_base_id(pkey) != EVP_PKEY_EC) {
         conscrypt::jniutil::throwRuntimeException(env, "not EC key");
         JNI_TRACE("EC_KEY_get1_group(%p) => not EC key (type == %d)", pkey, EVP_PKEY_id(pkey));
         return 0;
@@ -2427,50 +2433,58 @@ static jint NativeCrypto_EVP_MD_size(JNIEnv* env, jclass, jlong evpMdRef) {
 static jlong evpDigestSignVerifyInit(JNIEnv* env,
                                      int (*init_func)(EVP_MD_CTX*, EVP_PKEY_CTX**, const EVP_MD*,
                                                       ENGINE*, EVP_PKEY*),
-                                     const char* jniName, jobject evpMdCtxRef, jlong evpMdRef,
-                                     jobject pkeyRef) {
+                                     const char* jniName, jobject evpMdCtxRef, jlong evpPkeyCtx,
+                                     jlong evpMdRef) {
     EVP_MD_CTX* mdCtx = fromContextObject<EVP_MD_CTX>(env, evpMdCtxRef);
     if (mdCtx == nullptr) {
         JNI_TRACE("%s => mdCtx == null", jniName);
         return 0;
     }
-    const EVP_MD* md = reinterpret_cast<const EVP_MD*>(evpMdRef);
-    EVP_PKEY* pkey = fromContextObject<EVP_PKEY>(env, pkeyRef);
-    if (pkey == nullptr) {
-        JNI_TRACE("ctx=%p %s => pkey == null", mdCtx, jniName);
+
+    EVP_PKEY_CTX* pctx = reinterpret_cast<EVP_PKEY_CTX*>(evpPkeyCtx);
+    if (pctx == nullptr) {
+        JNI_TRACE("ctx=%p %s => pctx == null", mdCtx, jniName);
+        conscrypt::jniutil::throwNullPointerException(env, "pctx == null");
         return 0;
     }
-    JNI_TRACE("%s(%p, %p, %p) <- ptr", jniName, mdCtx, md, pkey);
 
+    const EVP_MD* md = reinterpret_cast<const EVP_MD*>(evpMdRef);
     if (md == nullptr) {
         JNI_TRACE("ctx=%p %s => md == null", mdCtx, jniName);
         conscrypt::jniutil::throwNullPointerException(env, "md == null");
         return 0;
     }
 
-    EVP_PKEY_CTX* pctx = nullptr;
-    if (init_func(mdCtx, &pctx, md, nullptr, pkey) <= 0) {
+    // EVP_PKEY* pkey = fromContextObject<EVP_PKEY>(env, pkeyRef);
+    // if (pkey == nullptr) {
+    //     JNI_TRACE("ctx=%p %s => pkey == null", mdCtx, jniName);
+    //     return 0;
+    // }
+    JNI_TRACE("%s(%p, %p, %p) <- ptr", jniName, mdCtx, pctx, md);
+
+    EVP_MD_CTX_set_pkey_ctx(mdCtx, pctx);
+    if (init_func(mdCtx, nullptr, md, nullptr, nullptr) <= 0) {
         JNI_TRACE("ctx=%p %s => threw exception", mdCtx, jniName);
         conscrypt::jniutil::throwExceptionFromBoringSSLError(env, jniName);
         return 0;
     }
 
-    JNI_TRACE("%s(%p, %p, %p) => success", jniName, mdCtx, md, pkey);
+    JNI_TRACE("%s(%p, %p, %p) => success", jniName, mdCtx, pctx, md);
     return reinterpret_cast<jlong>(pctx);
 }
 
 static jlong NativeCrypto_EVP_DigestSignInit(JNIEnv* env, jclass, jobject evpMdCtxRef,
-                                             const jlong evpMdRef, jobject pkeyRef) {
+                                             jlong evpPkeyCtx, const jlong evpMdRef) {
     CHECK_ERROR_QUEUE_ON_RETURN;
-    return evpDigestSignVerifyInit(env, EVP_DigestSignInit, "EVP_DigestSignInit", evpMdCtxRef,
-                                   evpMdRef, pkeyRef);
+    return evpDigestSignVerifyInit(env, EVP_DigestSignInit, "EVP_DigestSignInit", evpMdCtxRef, evpPkeyCtx,
+                                   evpMdRef);
 }
 
 static jlong NativeCrypto_EVP_DigestVerifyInit(JNIEnv* env, jclass, jobject evpMdCtxRef,
-                                               const jlong evpMdRef, jobject pkeyRef) {
+                                               jlong evpPkeyCtx, const jlong evpMdRef) {
     CHECK_ERROR_QUEUE_ON_RETURN;
-    return evpDigestSignVerifyInit(env, EVP_DigestVerifyInit, "EVP_DigestVerifyInit", evpMdCtxRef,
-                                   evpMdRef, pkeyRef);
+    return evpDigestSignVerifyInit(env, EVP_DigestVerifyInit, "EVP_DigestVerifyInit", evpMdCtxRef, evpPkeyCtx,
+                                   evpMdRef);
 }
 
 static void evpUpdate(JNIEnv* env, jobject evpMdCtxRef, jlong inPtr, jint inLength,
@@ -2755,8 +2769,8 @@ static jint evpPkeyEncryptDecrypt(JNIEnv* env,
     uint8_t* outBuf = reinterpret_cast<uint8_t*>(outBytes.get());
     const uint8_t* inBuf = reinterpret_cast<const uint8_t*>(inBytes.get());
     size_t outLength = outBytes.size() - outOffset;
-    if (!encrypt_decrypt_func(pkeyCtx, outBuf + outOffset, &outLength, inBuf + inOffset,
-                              static_cast<size_t>(inLength))) {
+    if (encrypt_decrypt_func(pkeyCtx, outBuf + outOffset, &outLength, inBuf + inOffset,
+                              static_cast<size_t>(inLength)) != 1) {
         JNI_TRACE("ctx=%p %s => threw exception", pkeyCtx, jniName);
         conscrypt::jniutil::throwExceptionFromBoringSSLError(
                 env, jniName, conscrypt::jniutil::throwBadPaddingException);
@@ -2820,6 +2834,28 @@ static jlong NativeCrypto_EVP_PKEY_encrypt_init(JNIEnv* env, jclass, jobject evp
 static jlong NativeCrypto_EVP_PKEY_decrypt_init(JNIEnv* env, jclass, jobject evpPkeyRef) {
     CHECK_ERROR_QUEUE_ON_RETURN;
     return evpPkeyEcryptDecryptInit(env, evpPkeyRef, EVP_PKEY_decrypt_init, "decrypt");
+}
+
+static jlong NativeCrypto_EVP_PKEY_CTX_create(JNIEnv* env, jclass, jobject evpPkeyRef) {
+    CHECK_ERROR_QUEUE_ON_RETURN;
+    EVP_PKEY* pkey = fromContextObject<EVP_PKEY>(env, evpPkeyRef);
+    JNI_TRACE("EVP_PKEY_CTX_create(%p)", pkey);
+
+    if (pkey == nullptr) {
+        JNI_TRACE("EVP_PKEY_CTX_create(%p) => pkey == null", pkey);
+        return 0;
+    }
+
+    UniquePtr<EVP_PKEY_CTX> pkeyCtx(EVP_PKEY_CTX_new(pkey, nullptr));
+    if (pkeyCtx.get() == nullptr) {
+        JNI_TRACE("EVP_PKEY_CTX_create(%p) => threw exception", pkey);
+        conscrypt::jniutil::throwExceptionFromBoringSSLError(
+                env, "EVP_PKEY_CTX_new", conscrypt::jniutil::throwInvalidKeyException);
+        return 0;
+    }
+
+    JNI_TRACE("EVP_PKEY_CTX_create(%p) => pkeyCtx=%p", pkey, pkeyCtx.get());
+    return reinterpret_cast<uintptr_t>(pkeyCtx.release());
 }
 
 static void NativeCrypto_EVP_PKEY_CTX_free(JNIEnv* env, jclass, jlong pkeyCtxRef) {
@@ -2951,6 +2987,37 @@ static void NativeCrypto_EVP_PKEY_CTX_set_rsa_oaep_label(JNIEnv* env, jclass, jl
     OWNERSHIP_TRANSFERRED(label);
 
     JNI_TRACE("EVP_PKEY_CTX_set_rsa_oaep_label(%p, %p) => success", pkeyCtx, labelJava);
+}
+
+static void NativeCrypto_EVP_PKEY_CTX_set_id(JNIEnv* env, jclass, jlong pkeyCtxRef,
+                                                         jbyteArray idJava) {
+    CHECK_ERROR_QUEUE_ON_RETURN;
+    EVP_PKEY_CTX* pkeyCtx = reinterpret_cast<EVP_PKEY_CTX*>(pkeyCtxRef);
+    JNI_TRACE("EVP_PKEY_CTX_set_id(%p, %p)", pkeyCtx, idJava);
+    if (pkeyCtx == nullptr) {
+        conscrypt::jniutil::throwNullPointerException(env, "pkeyCtx == null");
+        return;
+    }
+
+    ScopedByteArrayRO idBytes(env, idJava);
+    if (idBytes.get() == nullptr) {
+        return;
+    }
+
+    UniquePtr<uint8_t> id(reinterpret_cast<uint8_t*>(OPENSSL_malloc(idBytes.size())));
+    memcpy(id.get(), idBytes.get(), idBytes.size());
+
+    int result = EVP_PKEY_CTX_set1_id(pkeyCtx, id.get(), idBytes.size());
+    if (result <= 0) {
+        JNI_TRACE("ctx=%p EVP_PKEY_CTX_set_id => threw exception", pkeyCtx);
+        conscrypt::jniutil::throwExceptionFromBoringSSLError(
+                env, "EVP_PKEY_CTX_set_id",
+                conscrypt::jniutil::throwInvalidAlgorithmParameterException);
+        return;
+    }
+    OWNERSHIP_TRANSFERRED(id);
+
+    JNI_TRACE("EVP_PKEY_CTX_set_id(%p, %p) => success", pkeyCtx, idJava);
 }
 
 static jlong NativeCrypto_EVP_get_cipherbyname(JNIEnv* env, jclass, jstring algorithm) {
@@ -9759,11 +9826,11 @@ static JNINativeMethod sNativeCryptoMethods[] = {
         CONSCRYPT_NATIVE_METHOD(EVP_DigestFinal_ex, "(" REF_EVP_MD_CTX "[BI)I"),
         CONSCRYPT_NATIVE_METHOD(EVP_get_digestbyname, "(Ljava/lang/String;)J"),
         CONSCRYPT_NATIVE_METHOD(EVP_MD_size, "(J)I"),
-        CONSCRYPT_NATIVE_METHOD(EVP_DigestSignInit, "(" REF_EVP_MD_CTX "J" REF_EVP_PKEY ")J"),
+        CONSCRYPT_NATIVE_METHOD(EVP_DigestSignInit, "(" REF_EVP_MD_CTX "JJ)J"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestSignUpdate, "(" REF_EVP_MD_CTX "[BII)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestSignUpdateDirect, "(" REF_EVP_MD_CTX "JI)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestSignFinal, "(" REF_EVP_MD_CTX ")[B"),
-        CONSCRYPT_NATIVE_METHOD(EVP_DigestVerifyInit, "(" REF_EVP_MD_CTX "J" REF_EVP_PKEY ")J"),
+        CONSCRYPT_NATIVE_METHOD(EVP_DigestVerifyInit, "(" REF_EVP_MD_CTX "JJ)J"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestVerifyUpdate, "(" REF_EVP_MD_CTX "[BII)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestVerifyUpdateDirect, "(" REF_EVP_MD_CTX "JI)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_DigestVerifyFinal, "(" REF_EVP_MD_CTX "[BII)Z"),
@@ -9771,12 +9838,14 @@ static JNINativeMethod sNativeCryptoMethods[] = {
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_encrypt, "(" REF_EVP_PKEY_CTX "[BI[BII)I"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_decrypt_init, "(" REF_EVP_PKEY ")J"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_decrypt, "(" REF_EVP_PKEY_CTX "[BI[BII)I"),
+        CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_create, "(" REF_EVP_PKEY ")J"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_free, "(J)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_rsa_padding, "(JI)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_rsa_pss_saltlen, "(JI)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_rsa_mgf1_md, "(JJ)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_rsa_oaep_md, "(JJ)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_rsa_oaep_label, "(J[B)V"),
+        CONSCRYPT_NATIVE_METHOD(EVP_PKEY_CTX_set_id, "(J[B)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_get_cipherbyname, "(Ljava/lang/String;)J"),
         CONSCRYPT_NATIVE_METHOD(EVP_CipherInit_ex, "(" REF_EVP_CIPHER_CTX "J[B[BZ)V"),
         CONSCRYPT_NATIVE_METHOD(EVP_CipherUpdate, "(" REF_EVP_CIPHER_CTX "[BI[BII)I"),

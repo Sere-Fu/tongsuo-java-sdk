@@ -325,7 +325,8 @@ model {
                     if (toolChain in Clang || toolChain in Gcc) {
                         cppCompiler.args "-Wall",
                                 "-fPIC",
-                                "-O3",
+                                "-O0",
+                                "-g",
                                 "-std=c++17",
                                 "-I$jniSourceDir/main/include",
                                 "-I$jniSourceDir/unbundled/include",
@@ -430,18 +431,18 @@ model {
             }
 
             // Now define a task to strip the release binary (linux only)
-            if (osName == 'linux' && (!rootProject.hasProperty('nostrip') ||
-                    !rootProject.nostrip.toBoolean())) {
-                def stripTask = binary.tasks.taskName("strip")
-                project.tasks.register(stripTask as String, Exec) {
-                    dependsOn binary.tasks.link
-                    executable "strip"
-                    args binary.tasks.link.linkedFile.asFile.get()
-                }
-                copyTask.configure {
-                    dependsOn stripTask
-                }
-            }
+            // if (osName == 'linux' && (!rootProject.hasProperty('nostrip') ||
+            //         !rootProject.nostrip.toBoolean())) {
+            //     def stripTask = binary.tasks.taskName("strip")
+            //     project.tasks.register(stripTask as String, Exec) {
+            //         dependsOn binary.tasks.link
+            //         executable "strip"
+            //         args binary.tasks.link.linkedFile.asFile.get()
+            //     }
+            //     copyTask.configure {
+            //         dependsOn stripTask
+            //     }
+            // }
         }
     }
 }
@@ -478,4 +479,3 @@ static String classifierFor(osName, archName) {
 static String sourceSetName(classifier) {
     classifier.replaceAll("-", "_")
 }
-

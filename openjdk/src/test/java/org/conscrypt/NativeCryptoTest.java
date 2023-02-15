@@ -2768,17 +2768,19 @@ public class NativeCryptoTest {
 
         final NativeRef.EVP_MD_CTX ctx = new NativeRef.EVP_MD_CTX(NativeCrypto.EVP_MD_CTX_create());
         long evpMd = NativeCrypto.EVP_get_digestbyname("sha256");
-        NativeCrypto.EVP_DigestSignInit(ctx, evpMd, pkey);
+        long evpPkeyCtx = NativeCrypto.EVP_PKEY_CTX_create(pkey);
+
+        NativeCrypto.EVP_DigestSignInit(ctx, evpPkeyCtx,evpMd);
 
         try {
-            NativeCrypto.EVP_DigestSignInit(ctx, 0, pkey);
+            NativeCrypto.EVP_DigestSignInit(ctx, 0, evpMd);
             fail();
         } catch (RuntimeException expected) {
             // Expected.
         }
 
         try {
-            NativeCrypto.EVP_DigestSignInit(ctx, evpMd, null);
+            NativeCrypto.EVP_DigestSignInit(ctx, evpPkeyCtx, 0);
             fail();
         } catch (RuntimeException expected) {
             // Expected.

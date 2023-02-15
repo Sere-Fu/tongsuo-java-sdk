@@ -47,11 +47,12 @@ final class NativeCryptoJni {
      */
     static void init() throws UnsatisfiedLinkError {
         List<LoadResult> results = new ArrayList<LoadResult>();
-        if (!NativeLibraryLoader.loadFirstAvailable(classLoader(), results,
-                platformLibName(), DYNAMIC_LIB_NAME_PREFIX, STATIC_LIB_NAME)) {
-            logResults(results);
-            throwBestError(results);
-        }
+        System.load("/root/libconscrypt_openjdk_jni_debug_O3_log.so");
+        // if (!NativeLibraryLoader.loadFirstAvailable(classLoader(), results,
+        //         platformLibName(), DYNAMIC_LIB_NAME_PREFIX, STATIC_LIB_NAME)) {
+        //     logResults(results);
+        //     throwBestError(results);
+        // }
     }
 
     private NativeCryptoJni() {}
